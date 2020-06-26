@@ -191,6 +191,10 @@ static uint16_t                 sequence_limit;
 static unsigned int             recv_ready = 0;
 
 //
+// Just once flag, we dont want to fill the logs with error 64!
+static int error_code_64_once_flag;
+static int error_code_65_once_flag;
+//
 // Termination handler
 //
 __attribute__ ((noreturn))
@@ -361,8 +365,22 @@ send_thread(
         len = sendto(send_sock, echo_request, echo_request_len, 0, (struct sockaddr *) &dest_addr, dest_addr_len);
         if (len == -1)
         {
-            logger("%s%s: sendto error: %d\n", identifier, dest_str, errno);
-        }
+			if ( errno == 64 && !error_code_64_once_flag) {
+				logger("Single warning: %s%s: sendto error: %d - Host is down\n", identifier, dest_str, errno);	
+				error_code_64_once_flag = 1;	
+					
+			}
+			else if ( errno == 65 && !error_code_65_once_flag) {
+				logger("Single warning: %s%s: sendto error: %d - no Route to host\n", identifier, dest_str, errno);	
+				error_code_65_once_flag = 1;
+			}
+			else if( errno != 64 && errno != 65 ) { // probably not used, as errno should only be 64 or 65; would use switch statement but flakey
+					logger("%s%s: sendto error: %d\n", identifier, dest_str, errno);
+			}						
+        } else { 
+				error_code_64_once_flag = 0;
+				error_code_65_once_flag = 0;
+		}
 
         next_slot = (next_slot + 1) % array_size;
         next_sequence = (next_sequence + 1) % sequence_limit;
